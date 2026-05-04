@@ -13,6 +13,10 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+import matplotlib
+matplotlib.use("Agg")          # non-interactive backend — required on servers
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 import base64
 
@@ -397,49 +401,62 @@ def _probability_bar(team: str, prob: float, color: str) -> str:
 
 
 def _score_heatmap(lambda_home: float, lambda_away: float,
-                   home_team: str, away_team: str) -> go.Figure:
+                   home_team: str, away_team: str) -> plt.Figure:
     """
-    Build the second-leg score heatmap directly from Poisson lambdas.
-    Uses px.imshow (more reliable on HF) and np.add.at (no histogram2d).
+    Matplotlib heatmap — renders server-side as PNG, works on all platforms.
+    Plotly go.Heatmap has a known rendering issue inside HF's iframe.
     """
-    rng   = np.random.default_rng(42)
-    n     = 50_000
-    lh    = float(np.clip(lambda_home, 0.1, 6.0))
-    la    = float(np.clip(lambda_away, 0.1, 6.0))
-    hg    = rng.poisson(lh, n).astype(int)
-    ag    = rng.poisson(la, n).astype(int)
+    rng  = np.random.default_rng(42)
+    n    = 50_000
+    lh   = float(np.clip(lambda_home, 0.1, 6.0))
+    la   = float(np.clip(lambda_away, 0.1, 6.0))
+    hg   = rng.poisson(lh, n).astype(int)
+    ag   = rng.poisson(la, n).astype(int)
 
-    max_g = 8
+    max_g = 7
     mat   = np.zeros((max_g, max_g), dtype=float)
     mask  = (hg < max_g) & (ag < max_g)
     np.add.at(mat, (hg[mask], ag[mask]), 1.0)
-    z = (mat.T / n * 100)          # z[away_goals, home_goals], values in %
+    z = mat.T / n * 100          # z[away_goals, home_goals]
 
-    tick_labels = [str(i) for i in range(max_g)]
+    # ── UCL dark colour map ──────────────────────────────────────────────
+    colors = ["#050d1f", "#0d2240", "#1a4a8a", "#2a7fff", "#FFD700"]
+    cmap   = mcolors.LinearSegmentedColormap.from_list("ucl", colors)
 
-    fig = px.imshow(
-        z,
-        x=tick_labels,
-        y=tick_labels,
-        color_continuous_scale=["#050d1f", "#0d2240", "#1a4a8a", "#2a7fff", "#FFD700"],
-        aspect="auto",
-        labels={"x": home_team, "y": away_team, "color": "Prob %"},
-        zmin=0,
-        zmax=float(z.max()) if z.max() > 0 else 1.0,
-    )
-    fig.update_layout(
-        title=dict(text="Second-Leg Score Probability (%)", font=dict(color="#FFD700", size=13)),
-        xaxis=dict(title=dict(text=home_team, font=dict(color="#9db4d8")),
-                   tickfont=dict(color="#9db4d8"), gridcolor="#1e3a6e"),
-        yaxis=dict(title=dict(text=away_team, font=dict(color="#9db4d8")),
-                   tickfont=dict(color="#9db4d8"), gridcolor="#1e3a6e"),
-        coloraxis_colorbar=dict(title="Prob %", tickfont=dict(color="#9db4d8"),
-                                title_font=dict(color="#9db4d8")),
-        paper_bgcolor="#050d1f",
-        plot_bgcolor="#050d1f",
-        margin=dict(l=60, r=20, t=40, b=60),
-        height=340,
-    )
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    fig.patch.set_facecolor("#050d1f")
+    ax.set_facecolor("#050d1f")
+
+    im = ax.imshow(z, cmap=cmap, aspect="auto", origin="lower",
+                   vmin=0, vmax=max(float(z.max()), 0.01))
+
+    cbar = fig.colorbar(im, ax=ax, pad=0.02)
+    cbar.set_label("Prob %", color="#9db4d8", fontsize=9)
+    cbar.ax.yaxis.set_tick_params(color="#9db4d8")
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color="#9db4d8", fontsize=8)
+
+    ax.set_xticks(range(max_g))
+    ax.set_yticks(range(max_g))
+    ax.set_xticklabels(range(max_g), color="#9db4d8", fontsize=9)
+    ax.set_yticklabels(range(max_g), color="#9db4d8", fontsize=9)
+    ax.set_xlabel(home_team, color="#9db4d8", fontsize=10)
+    ax.set_ylabel(away_team, color="#9db4d8", fontsize=10)
+    ax.set_title("Second-Leg Score Probability (%)", color="#FFD700",
+                 fontsize=11, pad=10)
+
+    # Annotate cells with probability > 1 %
+    for row in range(max_g):
+        for col in range(max_g):
+            val = z[row, col]
+            if val >= 1.0:
+                ax.text(col, row, f"{val:.1f}%", ha="center", va="center",
+                        fontsize=7.5,
+                        color="black" if val > z.max() * 0.5 else "#e8eaf6")
+
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#1e3a6e")
+
+    plt.tight_layout(pad=1.2)
     return fig
 
 
@@ -1112,11 +1129,11 @@ for tab, pred in zip(TABS, predictions):
 
         # ── Score heatmap ─────────────────────────────────────────────────────
         st.markdown("#### 🔥 Second-Leg Score Probability Heatmap")
-        st.plotly_chart(
+        st.pyplot(
             _score_heatmap(pred["lambda_home"], pred["lambda_away"], home, away),
             use_container_width=True,
-            key=f"heatmap_{semi['id']}",
         )
+        plt.close("all")
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
