@@ -13,10 +13,6 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
-import matplotlib
-matplotlib.use("Agg")          # non-interactive backend — required on servers
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 
 import base64
 
@@ -401,10 +397,11 @@ def _probability_bar(team: str, prob: float, color: str) -> str:
 
 
 def _score_heatmap(lambda_home: float, lambda_away: float,
-                   home_team: str, away_team: str) -> plt.Figure:
+                   home_team: str, away_team: str) -> go.Figure:
     """
-    Matplotlib heatmap — renders server-side as PNG, works on all platforms.
-    Plotly go.Heatmap has a known rendering issue inside HF's iframe.
+    Plotly heatmap with all data as pure Python lists (not numpy arrays).
+    Numpy arrays can fail to serialize to JSON on some HF builds; explicit
+    list conversion guarantees correct rendering everywhere.
     """
     rng  = np.random.default_rng(42)
     n    = 50_000
@@ -417,46 +414,49 @@ def _score_heatmap(lambda_home: float, lambda_away: float,
     mat   = np.zeros((max_g, max_g), dtype=float)
     mask  = (hg < max_g) & (ag < max_g)
     np.add.at(mat, (hg[mask], ag[mask]), 1.0)
-    z = mat.T / n * 100          # z[away_goals, home_goals]
+    z_np  = mat.T / n * 100      # z[away_goals, home_goals]
 
-    # ── UCL dark colour map ──────────────────────────────────────────────
-    colors = ["#050d1f", "#0d2240", "#1a4a8a", "#2a7fff", "#FFD700"]
-    cmap   = mcolors.LinearSegmentedColormap.from_list("ucl", colors)
+    # ── Convert everything to pure Python types for reliable JSON serialisation
+    z     = [[round(float(v), 3) for v in row] for row in z_np.tolist()]
+    ticks = list(range(max_g))   # plain Python ints
 
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    fig.patch.set_facecolor("#050d1f")
-    ax.set_facecolor("#050d1f")
-
-    im = ax.imshow(z, cmap=cmap, aspect="auto", origin="lower",
-                   vmin=0, vmax=max(float(z.max()), 0.01))
-
-    cbar = fig.colorbar(im, ax=ax, pad=0.02)
-    cbar.set_label("Prob %", color="#9db4d8", fontsize=9)
-    cbar.ax.yaxis.set_tick_params(color="#9db4d8")
-    plt.setp(cbar.ax.yaxis.get_ticklabels(), color="#9db4d8", fontsize=8)
-
-    ax.set_xticks(range(max_g))
-    ax.set_yticks(range(max_g))
-    ax.set_xticklabels(range(max_g), color="#9db4d8", fontsize=9)
-    ax.set_yticklabels(range(max_g), color="#9db4d8", fontsize=9)
-    ax.set_xlabel(home_team, color="#9db4d8", fontsize=10)
-    ax.set_ylabel(away_team, color="#9db4d8", fontsize=10)
-    ax.set_title("Second-Leg Score Probability (%)", color="#FFD700",
-                 fontsize=11, pad=10)
-
-    # Annotate cells with probability > 1 %
-    for row in range(max_g):
-        for col in range(max_g):
-            val = z[row, col]
-            if val >= 1.0:
-                ax.text(col, row, f"{val:.1f}%", ha="center", va="center",
-                        fontsize=7.5,
-                        color="black" if val > z.max() * 0.5 else "#e8eaf6")
-
-    for spine in ax.spines.values():
-        spine.set_edgecolor("#1e3a6e")
-
-    plt.tight_layout(pad=1.2)
+    fig = go.Figure(go.Heatmap(
+        z=z,
+        x=ticks,
+        y=ticks,
+        colorscale=[
+            [0.00, "#050d1f"],
+            [0.10, "#0d2240"],
+            [0.40, "#1a4a8a"],
+            [0.70, "#2a7fff"],
+            [1.00, "#FFD700"],
+        ],
+        zmin=0,
+        zmax=round(float(z_np.max()), 3),
+        showscale=True,
+        colorbar=dict(
+            title=dict(text="Prob %", font=dict(color="#9db4d8")),
+            tickfont=dict(color="#9db4d8"),
+        ),
+        hovertemplate=(
+            f"{home_team} %{{x}} – %{{y}} {away_team}"
+            "<br>Probability: %{z:.2f}%<extra></extra>"
+        ),
+    ))
+    fig.update_layout(
+        title=dict(text="Second-Leg Score Probability (%)",
+                   font=dict(color="#FFD700", size=13)),
+        xaxis=dict(title=dict(text=home_team, font=dict(color="#9db4d8")),
+                   tickfont=dict(color="#9db4d8"), gridcolor="#1e3a6e",
+                   tickmode="array", tickvals=ticks),
+        yaxis=dict(title=dict(text=away_team, font=dict(color="#9db4d8")),
+                   tickfont=dict(color="#9db4d8"), gridcolor="#1e3a6e",
+                   tickmode="array", tickvals=ticks),
+        paper_bgcolor="#050d1f",
+        plot_bgcolor="#050d1f",
+        margin=dict(l=60, r=20, t=40, b=60),
+        height=360,
+    )
     return fig
 
 
@@ -1129,11 +1129,11 @@ for tab, pred in zip(TABS, predictions):
 
         # ── Score heatmap ─────────────────────────────────────────────────────
         st.markdown("#### 🔥 Second-Leg Score Probability Heatmap")
-        st.pyplot(
+        st.plotly_chart(
             _score_heatmap(pred["lambda_home"], pred["lambda_away"], home, away),
             use_container_width=True,
+            key=f"heatmap_{semi['id']}",
         )
-        plt.close("all")
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
