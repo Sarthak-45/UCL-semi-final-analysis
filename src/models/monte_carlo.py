@@ -38,11 +38,12 @@ class SimulationResult:
     pct_extra_time:     float = 0.0   # decided in extra time
     pct_penalties:      float = 0.0   # decided on pens (50-50 after ET)
 
-    # Score frequency matrix for the second leg  {(home_g, away_g): count}
-    score_distribution: dict = field(default_factory=dict)
+    # Score frequency matrix — shape (MAX_G, MAX_G), [home_goals, away_goals]
+    # Stored as numpy array so it survives cache serialization on all platforms
+    score_distribution: object = field(default_factory=lambda: np.zeros((8, 8), dtype=np.int32))
 
-    # Most likely second-leg scorelines (top 5)
-    top_scorelines: list[tuple] = field(default_factory=list)
+    # Most likely second-leg scorelines [(  (hg, ag), count ), ...]
+    top_scorelines: list = field(default_factory=list)
 
     # Aggregate goal totals distribution  {total_goals: count}
     agg_total_distribution: dict = field(default_factory=dict)
@@ -150,19 +151,21 @@ class MonteCarlo:
         prob_home = total_home / self.n_simulations
         prob_away = total_away / self.n_simulations
 
-        # ── Score distribution (second leg only) ──────────────────────────────
-        unique_scores, counts = np.unique(
-            np.column_stack([home_goals_2l, away_goals_2l]),
-            axis=0,
-            return_counts=True,
+        # ── Score distribution — 2D numpy array [home_goals, away_goals] ────────
+        max_g = 8
+        bins  = np.arange(max_g + 1) - 0.5          # edges: -0.5, 0.5, … 7.5
+        score_matrix, _, _ = np.histogram2d(
+            home_goals_2l, away_goals_2l, bins=bins
         )
-        score_dist = {
-            (int(r[0]), int(r[1])): int(c)
-            for r, c in zip(unique_scores, counts)
-        }
+        score_matrix = score_matrix.astype(np.int32)  # (8, 8)
 
         # Top 10 scorelines by frequency
-        top = sorted(score_dist.items(), key=lambda x: x[1], reverse=True)[:10]
+        flat_idx = np.argsort(score_matrix.ravel())[::-1][:10]
+        top = [
+            ((int(idx // max_g), int(idx % max_g)), int(score_matrix.ravel()[idx]))
+            for idx in flat_idx
+            if score_matrix.ravel()[idx] > 0
+        ]
 
         # Aggregate total goals distribution
         agg_total = home_agg + away_agg
@@ -178,7 +181,7 @@ class MonteCarlo:
             pct_normal_time      = round((n_home_90 + n_away_90) / self.n_simulations, 4),
             pct_extra_time       = round((int(home_wins_et) + int(away_wins_et)) / self.n_simulations, 4),
             pct_penalties        = round(n_pens / self.n_simulations, 4),
-            score_distribution   = score_dist,
+            score_distribution   = score_matrix,
             top_scorelines       = top,
             agg_total_distribution = agg_total_dist,
             expected_home_goals  = round(float(home_goals_2l.mean()), 3),

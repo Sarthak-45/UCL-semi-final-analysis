@@ -398,12 +398,10 @@ def _probability_bar(team: str, prob: float, color: str) -> str:
 
 def _score_heatmap(sim_result, home_team: str, away_team: str) -> go.Figure:
     """Return a Plotly density heatmap of second-leg scorelines."""
-    dist = sim_result.score_distribution
-    max_g = 7
-    z = np.zeros((max_g, max_g))
-    for (hg, ag), cnt in dist.items():
-        if hg < max_g and ag < max_g:
-            z[ag][hg] = cnt / sim_result.n_sims * 100
+    mat   = np.asarray(sim_result.score_distribution)   # (max_g, max_g) [home, away]
+    max_g = mat.shape[0]
+    # Transpose: z[away_goals][home_goals] so y=away, x=home
+    z     = mat.T / sim_result.n_sims * 100
 
     ticks = list(range(max_g))
     fig = go.Figure(go.Heatmap(
