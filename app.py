@@ -959,7 +959,7 @@ for tab, pred in zip(TABS, predictions):
         left, right = st.columns([3, 2])
 
         with left:
-            st.markdown("#### 📊 Advancement Probabilities")
+            st.markdown('<h4 style="color:#ffffff;font-weight:700;">Advancement Probabilities</h4>', unsafe_allow_html=True)
 
             prob_home = sim.prob_home_advances
             prob_away = sim.prob_away_advances
@@ -1097,7 +1097,7 @@ for tab, pred in zip(TABS, predictions):
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
         # ── Why model favors X ────────────────────────────────────────────────
-        st.markdown("#### 🧠 Why the Model Favors This Outcome")
+        st.markdown('<h4 style="color:#ffffff;font-weight:700;">Why the Model Favors This Outcome</h4>', unsafe_allow_html=True)
         why_col, feat_col = st.columns([2, 3])
         with why_col:
             bullets_html = "".join(
@@ -1128,7 +1128,7 @@ for tab, pred in zip(TABS, predictions):
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
         # ── Score heatmap ─────────────────────────────────────────────────────
-        st.markdown("#### 🔥 Second-Leg Score Probability Heatmap")
+        st.markdown('<h4 style="color:#ffffff;font-weight:700;">Second-Leg Score Probability Heatmap</h4>', unsafe_allow_html=True)
         st.plotly_chart(
             _score_heatmap(pred["lambda_home"], pred["lambda_away"], home, away),
             use_container_width=True,
@@ -1138,7 +1138,7 @@ for tab, pred in zip(TABS, predictions):
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
         # ── Model calibration ─────────────────────────────────────────────────
-        st.markdown("#### 📐 Ensemble Calibration (Reliability Diagram)")
+        st.markdown('<h4 style="color:#ffffff;font-weight:700;">Ensemble Calibration (Reliability Diagram)</h4>', unsafe_allow_html=True)
         cal_col, cal_info_col = st.columns([2, 1])
         with cal_col:
             cal_data = ensemble.calibration_data()
@@ -1196,7 +1196,7 @@ for tab, pred in zip(TABS, predictions):
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
         # ── UCL History charts ────────────────────────────────────────────────
-        st.markdown("#### 🏆 UCL History — Last 5 Seasons")
+        st.markdown('<h4 style="color:#ffffff;font-weight:700;">UCL History — Last 5 Seasons</h4>', unsafe_allow_html=True)
         ch1, ch2 = st.columns(2)
         with ch1:
             st.plotly_chart(_ucl_history_chart(home, away), use_container_width=True,
@@ -1222,7 +1222,7 @@ for tab, pred in zip(TABS, predictions):
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
         # ── League form ───────────────────────────────────────────────────────
-        st.markdown("#### 🏟️ Domestic League Form (2024-25)")
+        st.markdown('<h4 style="color:#ffffff;font-weight:700;">Domestic League Form (2024-25)</h4>', unsafe_allow_html=True)
         lc1, lc2 = st.columns(2)
         with lc1:
             st.markdown(
@@ -1244,7 +1244,7 @@ for tab, pred in zip(TABS, predictions):
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
         # ── H2H record ────────────────────────────────────────────────────────
-        st.markdown("#### ⚔️ Head-to-Head Record")
+        st.markdown('<h4 style="color:#ffffff;font-weight:700;">Head-to-Head Record</h4>', unsafe_allow_html=True)
         h2h_stats = compute_h2h_stats(f"{home}_vs_{away}")
         if h2h_stats["played"] == 0:
             h2h_stats = compute_h2h_stats(f"{away}_vs_{home}")
@@ -1257,7 +1257,7 @@ for tab, pred in zip(TABS, predictions):
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
         # ── AI Analysis ───────────────────────────────────────────────────────
-        st.markdown("#### 🤖 AI Tactical Analysis (Gemini)")
+        st.markdown('<h4 style="color:#ffffff;font-weight:700;">AI Tactical Analysis (Gemini)</h4>', unsafe_allow_html=True)
         if run_ai:
             with st.spinner("Generating AI analysis..."):
                 analysis = _get_ai_analysis(
