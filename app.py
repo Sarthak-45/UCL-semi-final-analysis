@@ -396,12 +396,20 @@ def _probability_bar(team: str, prob: float, color: str) -> str:
     )
 
 
-def _score_heatmap(sim_result, home_team: str, away_team: str) -> go.Figure:
-    """Return a Plotly density heatmap of second-leg scorelines."""
-    mat   = np.asarray(sim_result.score_distribution)   # (max_g, max_g) [home, away]
-    max_g = mat.shape[0]
-    # Transpose: z[away_goals][home_goals] so y=away, x=home
-    z     = mat.T / sim_result.n_sims * 100
+def _score_heatmap(lambda_home: float, lambda_away: float,
+                   home_team: str, away_team: str) -> go.Figure:
+    """
+    Build the second-leg score heatmap directly from Poisson lambdas.
+    Generates its own 50k samples — no dependency on cached SimulationResult.
+    """
+    rng   = np.random.default_rng(42)
+    n     = 50_000
+    hg    = rng.poisson(max(lambda_home, 0.1), n)
+    ag    = rng.poisson(max(lambda_away, 0.1), n)
+    max_g = 8
+    bins  = np.arange(max_g + 1) - 0.5                  # edges -0.5 … 7.5
+    mat, _, _ = np.histogram2d(hg, ag, bins=bins)        # mat[home_g, away_g]
+    z = mat.T / n * 100                                  # z[away_g, home_g]
 
     ticks = list(range(max_g))
     fig = go.Figure(go.Heatmap(
@@ -422,9 +430,9 @@ def _score_heatmap(sim_result, home_team: str, away_team: str) -> go.Figure:
     fig.update_layout(
         title=dict(text="Second-Leg Score Probability (%)", font=dict(color="#FFD700", size=13)),
         xaxis=dict(title=dict(text=home_team, font=dict(color="#9db4d8")), tickfont=dict(color="#9db4d8"),
-                   gridcolor="#1e3a6e"),
+                   gridcolor="#1e3a6e", dtick=1),
         yaxis=dict(title=dict(text=away_team, font=dict(color="#9db4d8")), tickfont=dict(color="#9db4d8"),
-                   gridcolor="#1e3a6e"),
+                   gridcolor="#1e3a6e", dtick=1),
         paper_bgcolor="#050d1f",
         plot_bgcolor="#050d1f",
         margin=dict(l=60, r=20, t=40, b=60),
@@ -1102,8 +1110,11 @@ for tab, pred in zip(TABS, predictions):
 
         # ── Score heatmap ─────────────────────────────────────────────────────
         st.markdown("#### 🔥 Second-Leg Score Probability Heatmap")
-        st.plotly_chart(_score_heatmap(sim, home, away), use_container_width=True,
-                        key=f"heatmap_{semi['id']}")
+        st.plotly_chart(
+            _score_heatmap(pred["lambda_home"], pred["lambda_away"], home, away),
+            use_container_width=True,
+            key=f"heatmap_{semi['id']}",
+        )
 
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
