@@ -357,7 +357,7 @@ def _get_poisson_model():
     return PoissonGoalModel().fit()
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def _run_simulation(semi_id: str, lambda_home: float, lambda_away: float):
     cfg = next(s for s in SEMIFINALS if s["id"] == semi_id)
     return simulate_semifinal(cfg, overrides={"lambda_home": lambda_home, "lambda_away": lambda_away})
