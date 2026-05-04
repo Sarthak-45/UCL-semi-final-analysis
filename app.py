@@ -400,39 +400,41 @@ def _score_heatmap(lambda_home: float, lambda_away: float,
                    home_team: str, away_team: str) -> go.Figure:
     """
     Build the second-leg score heatmap directly from Poisson lambdas.
-    Generates its own 50k samples — no dependency on cached SimulationResult.
+    Uses px.imshow (more reliable on HF) and np.add.at (no histogram2d).
     """
     rng   = np.random.default_rng(42)
     n     = 50_000
-    hg    = rng.poisson(max(lambda_home, 0.1), n)
-    ag    = rng.poisson(max(lambda_away, 0.1), n)
-    max_g = 8
-    bins  = np.arange(max_g + 1) - 0.5                  # edges -0.5 … 7.5
-    mat, _, _ = np.histogram2d(hg, ag, bins=bins)        # mat[home_g, away_g]
-    z = mat.T / n * 100                                  # z[away_g, home_g]
+    lh    = float(np.clip(lambda_home, 0.1, 6.0))
+    la    = float(np.clip(lambda_away, 0.1, 6.0))
+    hg    = rng.poisson(lh, n).astype(int)
+    ag    = rng.poisson(la, n).astype(int)
 
-    ticks = list(range(max_g))
-    fig = go.Figure(go.Heatmap(
-        z=z,
-        x=ticks,
-        y=ticks,
-        colorscale=[
-            [0.0, "#050d1f"],
-            [0.1, "#0d2240"],
-            [0.4, "#1a4a8a"],
-            [0.7, "#2a7fff"],
-            [1.0, "#FFD700"],
-        ],
-        showscale=True,
-        colorbar=dict(title=dict(text="Prob %", font=dict(color="#9db4d8")), tickfont=dict(color="#9db4d8")),
-        hovertemplate=f"{home_team} %{{x}} – %{{y}} {away_team}<br>Probability: %{{z:.2f}}%<extra></extra>",
-    ))
+    max_g = 8
+    mat   = np.zeros((max_g, max_g), dtype=float)
+    mask  = (hg < max_g) & (ag < max_g)
+    np.add.at(mat, (hg[mask], ag[mask]), 1.0)
+    z = (mat.T / n * 100)          # z[away_goals, home_goals], values in %
+
+    tick_labels = [str(i) for i in range(max_g)]
+
+    fig = px.imshow(
+        z,
+        x=tick_labels,
+        y=tick_labels,
+        color_continuous_scale=["#050d1f", "#0d2240", "#1a4a8a", "#2a7fff", "#FFD700"],
+        aspect="auto",
+        labels={"x": home_team, "y": away_team, "color": "Prob %"},
+        zmin=0,
+        zmax=float(z.max()) if z.max() > 0 else 1.0,
+    )
     fig.update_layout(
         title=dict(text="Second-Leg Score Probability (%)", font=dict(color="#FFD700", size=13)),
-        xaxis=dict(title=dict(text=home_team, font=dict(color="#9db4d8")), tickfont=dict(color="#9db4d8"),
-                   gridcolor="#1e3a6e", dtick=1),
-        yaxis=dict(title=dict(text=away_team, font=dict(color="#9db4d8")), tickfont=dict(color="#9db4d8"),
-                   gridcolor="#1e3a6e", dtick=1),
+        xaxis=dict(title=dict(text=home_team, font=dict(color="#9db4d8")),
+                   tickfont=dict(color="#9db4d8"), gridcolor="#1e3a6e"),
+        yaxis=dict(title=dict(text=away_team, font=dict(color="#9db4d8")),
+                   tickfont=dict(color="#9db4d8"), gridcolor="#1e3a6e"),
+        coloraxis_colorbar=dict(title="Prob %", tickfont=dict(color="#9db4d8"),
+                                title_font=dict(color="#9db4d8")),
         paper_bgcolor="#050d1f",
         plot_bgcolor="#050d1f",
         margin=dict(l=60, r=20, t=40, b=60),
