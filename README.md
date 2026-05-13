@@ -8,6 +8,11 @@ sdk_version: "1.32.0"
 app_file: app.py
 pinned: true
 ---
+<p align="center">
+  <a href="https://huggingface.co/spaces/Sarthak-45/UCL-SemiFinal">
+    <img src="https://img.shields.io/badge/⚽%20LIVE%20DEMO-UCL%20AI%20PREDICTOR-blue?style=for-the-badge" />
+  </a>
+</p>
 
 # UCL 2025-26 Semifinal Predictor
 
